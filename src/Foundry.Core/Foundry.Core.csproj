@@ -7,7 +7,7 @@
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="MongoDB.Bson" Version="3.4.0" />
-    <PackageReference Include="Humanizer.Core" Version="2.14.1" />
+    <PackageReference Include="MongoDB.Bson" />
+    <PackageReference Include="Humanizer.Core" />
   </ItemGroup>
 </Project>
