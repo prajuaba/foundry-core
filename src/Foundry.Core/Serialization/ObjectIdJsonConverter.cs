@@ -107,9 +107,17 @@ public static class FoundryJsonDefaults
     public static readonly JsonSerializerOptions Options = CreateOptions();
 
     /// <summary>Builds a fresh options instance with Foundry's converters applied.</summary>
+    /// <remarks>
+    /// Case-insensitive reads mirror how ASP.NET Core binds request bodies, so a payload the
+    /// API would accept also deserialises through these options. <see cref="Apply"/> deliberately
+    /// does not set this, because there it would override the host's own configuration.
+    /// </remarks>
     public static JsonSerializerOptions CreateOptions()
     {
-        var options = new JsonSerializerOptions();
+        var options = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
         Apply(options);
         return options;
     }
