@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using MongoDB.Bson;
 
 namespace Foundry.Core.Serialization;
@@ -132,5 +133,48 @@ public static class FoundryJsonDefaults
 
         if (!options.Converters.Any(c => c is JsonStringEnumConverter))
             options.Converters.Add(new JsonStringEnumConverter());
+
+        options.TypeInfoResolver = (options.TypeInfoResolver ?? new DefaultJsonTypeInfoResolver())
+            .WithAddedModifier(MakeAuditTimestampsReadOnly);
     }
+
+    /// <summary>
+    /// Audit timestamps the server owns outright. Emitted to clients, never read from them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Deliberately excludes <c>Version</c>. That is the optimistic-concurrency token: the
+    /// repository reads it from the incoming entity and filters the update on it, so a client
+    /// must send it back for a conflicting write to be detected. Making it read-only would
+    /// silently bind it to 0, and every update would filter on a version no document has.
+    /// It behaves like an ETag, and round-tripping it is the intended contract.
+    /// </para>
+    /// <para>
+    /// These two are different: the repository overwrites <c>CreatedAtUtc</c> from the stored
+    /// document and stamps <c>UpdatedAtUtc</c> with the current time on every write, so anything
+    /// a client sends is discarded regardless. Accepting them only invites callers to believe
+    /// they can set audit history.
+    /// </para>
+    /// </remarks>
+    private static readonly string[] ServerOwnedTimestamps = ["CreatedAtUtc", "UpdatedAtUtc"];
+
+    /// <summary>
+    /// Clears the setter for server-owned audit timestamps on entity types, so they serialize
+    /// out but are ignored on the way in.
+    /// </summary>
+    private static void MakeAuditTimestampsReadOnly(JsonTypeInfo typeInfo)
+    {
+        if (typeInfo.Kind != JsonTypeInfoKind.Object) return;
+        if (!IsEntity(typeInfo.Type)) return;
+
+        foreach (var property in typeInfo.Properties)
+        {
+            if (ServerOwnedTimestamps.Contains(property.Name, StringComparer.OrdinalIgnoreCase))
+                property.Set = null;
+        }
+    }
+
+    private static bool IsEntity(Type type)
+        => type.GetInterfaces().Any(i =>
+            i.IsGenericType && i.GetGenericTypeDefinition() == typeof(Foundry.Core.Entities.IEntity<>));
 }
